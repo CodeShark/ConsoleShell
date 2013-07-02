@@ -7,8 +7,8 @@ LIBS = \
 
 all: console
 
-console: src/console.cpp
-	$(CXX) $(CXX_FLAGS) -o $@ $< \
+console: src/console.cpp src/console_session.cpp src/console_session.h src/dirty_vector.h
+	$(CXX) $(CXX_FLAGS) -o $@ $^ \
 	$(LIBS)
 
 clean:
