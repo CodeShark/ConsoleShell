@@ -55,32 +55,119 @@ int logical_mvaddstr(int row, int col, const char* str, int mode = MAP_WRAP_AROU
 class ConsoleSession
 {
 private:
-    int mode;
-    std::vector<std::string> lines;
+    unsigned int cursorRow;
+    unsigned int cursorCol;
 
+    std::string prompt;
+    std::string editLine;
+
+    int mode;
+    bool bReplace;
+    std::vector<std::string> lines;
+    std::vector<std::string> input;
+
+protected:
+    bool handleMotion(int c)
+    {
+        assert(cursorCol >= prompt.size());
+        size_t pos = cursorCol - prompt.size();
+
+        switch (c) {
+        case KEY_LEFT:
+            if (pos > 0) cursorCol--;
+            return true;
+
+        case KEY_RIGHT:
+            if (pos < editLine.size()) cursorCol++;
+            return true;
+
+        default:
+            return false;
+        }
+    }
+
+    bool handleEdit(int c)
+    {
+        assert(cursorCol >= prompt.size());
+        size_t pos = cursorCol - prompt.size();
+
+        switch (c) {
+        case KEY_BACKSPACE:
+            if (pos > 0) {
+                cursorCol--;
+                editLine.erase(pos - 1, 1);
+                logical_mvaddstr(cursorRow, cursorCol, editLine.substr(pos - 1).c_str(), mode);
+                addch(' ');
+            }
+            return true;
+
+        default:
+            return false;
+        }
+    }
+
+    bool handleVisible(int c)
+    {
+        if (c < ' ' || c > '~') return false;
+
+        assert(cursorCol >= prompt.size());
+        size_t pos = cursorCol - prompt.size();
+
+        if (pos > editLine.size()) {
+            editLine += c;
+        }
+        else if (bReplace) {
+            editLine.replace(pos, 1, 1, c);
+        }
+        else {
+            editLine.insert(pos, 1, c);
+            logical_mvaddstr(cursorRow, cursorCol + 1, editLine.substr(pos + 1).c_str());
+        }
+        logical_mvaddch(cursorRow, cursorCol, c);
+        cursorCol++;
+        return true;
+    }
+ 
 public:
-    ConsoleSession(int _mode = MAP_WRAP_AROUND) : mode(_mode) { }
+    ConsoleSession(const std::string& _prompt = "> ", int _mode = MAP_WRAP_AROUND) : cursorRow(0), cursorCol(0), prompt(_prompt), mode(_mode), bReplace(false) { }
+
+    string getLine()
+    {   
+        attrset(COLOR_PAIR(4));
+        logical_mvaddstr(cursorRow, cursorCol, prompt.c_str());
+        attrset(COLOR_PAIR(7));
+        int promptlen = prompt.size();
+        cursorCol += promptlen;
+        editLine = "";
+        while (true)
+        {   
+            logical_move(cursorRow, cursorCol);
+            chgat(1, A_STANDOUT, 0, NULL);
+            int c = getch();
+            chgat(1, A_NORMAL, 0, NULL);
+            if (c == _KEY_ENTER) break;
+
+            if (!handleMotion(c) &&
+                !handleEdit(c) &&
+                !handleVisible(c))
+            {
+                stringstream ss;
+                ss << c;
+                logical_mvaddstr(1, 0, ss.str().c_str());
+                addstr("     ");
+            }
+        }
+        cursorRow++;
+        cursorCol = 0;
+
+        input.push_back(editLine);
+        lines.push_back(prompt + editLine);
+        return editLine;
+    }
+
 };
 
-bool handleMotion(int& row, int& col, int promptlen, string& line, int c)
-{
-    assert(col >= promptlen);
-    size_t pos = col - promptlen;
-
-    switch (c) {
-    case KEY_LEFT:
-        if (pos > 0) col--;
-        return true;
-
-    case KEY_RIGHT:
-        if (pos < line.size()) col++;
-        return true;
-
-    default:
-        return false;
-    }
-}
-
+/*
 bool handleVisible(int& row, int& col, int promptlen, string& line, int c, bool bReplace = false)
 {
     if (c < ' ' || c > '~') return false;
@@ -152,7 +239,7 @@ string getLine(int row = 0, int col = 0, const string& prompt = "> ")
 
     return line;
 }
-
+*/
 // SIGWINCH is called when the window is resized.
 void handle_winch(int sig)
 {
@@ -210,11 +297,12 @@ int main(int argc, char *argv[])
         init_pair(7, COLOR_WHITE,   COLOR_BLACK);
     }
 
+    ConsoleSession cs;
     while (true) {
-        string line = getLine(0, 0, "> ");
+        string line = cs.getLine();
         if (line == "exit") break;
 
-        mvprintw(10, 0, line.c_str());
+        mvprintw(20, 0, line.c_str());
     }
 
     finish(0);               /* we're done */
