@@ -112,7 +112,11 @@ void doOutput(const std::string& output)
     output_history.push_back(output);
     std::stringstream out;
     out << "Out: [" << output_history.size() << "] " << output;
-    cs.putLine(out.str());
+
+    std::string line;
+    while (std::getline(out, line, '\n')) {
+        cs.putLine(line);
+    }
 }
 
 void doError(const std::string& error)
