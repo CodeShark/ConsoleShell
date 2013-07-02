@@ -52,6 +52,8 @@ int logical_mvaddstr(int row, int col, const char* str, int mode = MAP_WRAP_AROU
     return mvaddstr(mapRow(row, col, mode), mapCol(row, col, mode), str);
 }
 
+std::string dummystr;
+
 class ConsoleSession
 {
 private:
@@ -59,12 +61,14 @@ private:
     unsigned int cursorCol;
 
     std::string prompt;
-    std::string editLine;
+    std::string& editLine;
 
     int mode;
     bool bReplace;
     std::vector<std::string> lines;
     std::vector<std::string> input;
+
+    size_t currentInput;
 
 protected:
     bool handleMotion(int c)
@@ -101,6 +105,21 @@ protected:
             }
             return true;
 
+        case KEY_UP:
+            if (currentInput > 0) {
+                editLine = input[--currentInput];
+                addstr(editLine.c_str());
+                logical_mvaddstr(cursorRow, prompt.size(), editLine.c_str(), mode);
+            }
+            return true;
+
+        case KEY_DOWN:
+            if (currentInput < input.size() - 1) {
+                editLine = input[++currentInput];
+                logical_mvaddstr(cursorRow, prompt.size(), editLine.c_str(), mode);
+            }
+            return true;
+
         default:
             return false;
         }
@@ -129,7 +148,7 @@ protected:
     }
  
 public:
-    ConsoleSession(const std::string& _prompt = "> ", int _mode = MAP_WRAP_AROUND) : cursorRow(0), cursorCol(0), prompt(_prompt), mode(_mode), bReplace(false) { }
+    ConsoleSession(const std::string& _prompt = "> ", int _mode = MAP_WRAP_AROUND) : cursorRow(0), cursorCol(0), prompt(_prompt), editLine(dummystr), mode(_mode), bReplace(false), currentInput(0) { }
 
     string getLine()
     {   
@@ -138,7 +157,8 @@ public:
         attrset(COLOR_PAIR(7));
         int promptlen = prompt.size();
         cursorCol += promptlen;
-        editLine = "";
+        input.push_back("");
+        editLine = input.back();
         while (true)
         {   
             logical_move(cursorRow, cursorCol);
@@ -160,8 +180,9 @@ public:
         cursorRow++;
         cursorCol = 0;
 
-        input.push_back(editLine);
         lines.push_back(prompt + editLine);
+        currentInput = input.size();
+
         return editLine;
     }
 
