@@ -5,19 +5,62 @@
 
 #include <sstream>
 #include <string>
+#include <vector>
 
 using namespace std;
 
 static void finish(int sig);
 
-#define ENTER_KEY       13
 
-#define DOWN_ARROW      258
-#define UP_ARROW        259
-#define LEFT_ARROW      260
-#define RIGHT_ARROW     261
+// KEY_ENTER = 232 rather than 13
+#define _KEY_ENTER       13
 
-#define BACKSPACE       263
+enum {
+    MAP_NONE = 0,
+    MAP_WRAP_AROUND
+};
+
+inline int mapRow(int row, int col, int mode = MAP_WRAP_AROUND)
+{
+    if (mode == MAP_WRAP_AROUND) return row + col/COLS;
+    else return row;
+}
+
+inline int mapCol(int row, int col, int mode = MAP_WRAP_AROUND)
+{
+    if (mode == MAP_WRAP_AROUND) return col % COLS;
+    else return col;
+}
+
+int logical_move(int row, int col, int mode = MAP_WRAP_AROUND)
+{
+    return move(mapRow(row, col, mode), mapCol(row, col, mode));
+}
+
+int logical_mvchgat(int row, int col, int n, attr_t attr, short color, const void* opts, int mode = MAP_WRAP_AROUND)
+{
+    return mvchgat(mapRow(row, col, mode), mapCol(row, col, mode), n, attr, color, opts);
+}
+
+int logical_mvaddch(int row, int col, const chtype c, int mode = MAP_WRAP_AROUND)
+{
+    return mvaddch(mapRow(row, col, mode), mapCol(row, col, mode), c);
+}
+
+int logical_mvaddstr(int row, int col, const char* str, int mode = MAP_WRAP_AROUND)
+{
+    return mvaddstr(mapRow(row, col, mode), mapCol(row, col, mode), str);
+}
+
+class ConsoleSession
+{
+private:
+    int mode;
+    std::vector<std::string> lines;
+
+public:
+    ConsoleSession(int _mode = MAP_WRAP_AROUND) : mode(_mode) { }
+};
 
 bool handleMotion(int& row, int& col, int promptlen, string& line, int c)
 {
@@ -25,11 +68,11 @@ bool handleMotion(int& row, int& col, int promptlen, string& line, int c)
     size_t pos = col - promptlen;
 
     switch (c) {
-    case LEFT_ARROW:
+    case KEY_LEFT:
         if (pos > 0) col--;
         return true;
 
-    case RIGHT_ARROW:
+    case KEY_RIGHT:
         if (pos < line.size()) col++;
         return true;
 
@@ -53,9 +96,9 @@ bool handleVisible(int& row, int& col, int promptlen, string& line, int c, bool 
     }
     else {
         line.insert(pos, 1, c);
-        mvprintw(row, col + 1, "%s", line.substr(pos + 1).c_str());
+        logical_mvaddstr(row, col + 1, line.substr(pos + 1).c_str());
     }
-    mvaddch(row, col, c);
+    logical_mvaddch(row, col, c);
     col++;
     return true;
 }
@@ -66,11 +109,11 @@ bool handleEdit(int& row, int& col, int promptlen, string& line, int c)
     size_t pos = col - promptlen;
 
     switch (c) {
-    case BACKSPACE:
+    case KEY_BACKSPACE:
         if (pos > 0) {
             col--;
             line.erase(pos - 1, 1);
-            mvprintw(row, col, "%s", line.substr(pos - 1).c_str());
+            logical_mvaddstr(row, col, line.substr(pos - 1).c_str());
             addch(' ');
         }
         return true;
@@ -83,18 +126,18 @@ bool handleEdit(int& row, int& col, int promptlen, string& line, int c)
 string getLine(int row = 0, int col = 0, const string& prompt = "> ")
 {
     attrset(COLOR_PAIR(4));
-    mvprintw(row, col, "%s", prompt.c_str());
+    logical_mvaddstr(row, col, prompt.c_str());
     attrset(COLOR_PAIR(7));
     int promptlen = prompt.size();
     col += promptlen;
     string line = "";
     while (true)
     {
-        move(row, col);
+        logical_move(row, col);
         chgat(1, A_STANDOUT, 0, NULL);
         int c = getch();
         chgat(1, A_NORMAL, 0, NULL);
-        if (c == ENTER_KEY) break;
+        if (c == _KEY_ENTER) break;
 
         if (!handleMotion(row, col, promptlen, line, c) &&
             !handleEdit(row, col, promptlen, line, c) &&
@@ -102,25 +145,51 @@ string getLine(int row = 0, int col = 0, const string& prompt = "> ")
         {
             stringstream ss;
             ss << c;
-            mvprintw(1, 0, "%s   ", ss.str().c_str());
-            move(row, col);
+            logical_mvaddstr(1, 0, ss.str().c_str());
+            addstr("     ");
         }
     }
 
     return line;
 }
 
+// SIGWINCH is called when the window is resized.
+void handle_winch(int sig)
+{
+    signal(SIGWINCH, SIG_IGN);
+
+    // Reinitialize the window to update data structures.
+    endwin();
+    initscr();
+    refresh();
+    //clear();
+
+    stringstream ss;
+    ss << COLS << " x " << LINES;
+    const string& dims = ss.str();
+
+    // Approximate the center
+    int x = COLS / 2 - dims.size() / 2;
+    int y = LINES / 2 - 1;
+
+    mvaddstr(y, x, dims.c_str());
+    refresh();
+
+    signal(SIGWINCH, handle_winch);
+}
+
 int main(int argc, char *argv[])
 {
     /* initialize your non-curses data structures here */
 
-    (void) signal(SIGINT, finish);      /* arrange interrupts to terminate */
+    signal(SIGINT, finish);
+    signal(SIGWINCH, handle_winch);
 
-    (void) initscr();      /* initialize the curses library */
+    initscr();      /* initialize the curses library */
     keypad(stdscr, TRUE);  /* enable keyboard mapping */
-    (void) nonl();         /* tell curses not to do NL->CR/NL on output */
-    (void) cbreak();       /* take input chars one at a time, no wait for \n */
-    (void) noecho();    
+    nonl();         /* tell curses not to do NL->CR/NL on output */
+    cbreak();       /* take input chars one at a time, no wait for \n */
+    noecho();    
 
     if (has_colors())
     {
@@ -140,36 +209,12 @@ int main(int argc, char *argv[])
         init_pair(6, COLOR_MAGENTA, COLOR_BLACK);
         init_pair(7, COLOR_WHITE,   COLOR_BLACK);
     }
-/*
-    attrset(COLOR_PAIR(7));
-    int row = 0;
-    int col = 0;
-    string line;
-    for (;;)
-    {
-        move(row, col);
-        chgat(1, A_STANDOUT, 0, NULL);
-        int c = getch();
-        chgat(1, A_NORMAL, 0, NULL);
 
-        if (!handleMotion(row, col, line, c) &&
-            !handleEdit(row, col, line, c) &&
-            !handleVisible(row, col, line, c))
-        {
-            stringstream ss;
-            ss << c;
-            mvprintw(1, 0, "%s   ", ss.str().c_str());
-            move(row, col);
-        }
-
-    }*/
-
-    string lastline = "";
     while (true) {
         string line = getLine(0, 0, "> ");
         if (line == "exit") break;
 
-        mvprintw(1, 0, "%s", line.c_str());
+        mvprintw(10, 0, line.c_str());
     }
 
     finish(0);               /* we're done */
