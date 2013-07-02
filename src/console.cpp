@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "dirty_vector.h"
+
 using namespace std;
 
 static void finish(int sig);
@@ -55,19 +57,33 @@ int logical_mvaddstr(int row, int col, const char* str, int mode = MAP_WRAP_AROU
 class ConsoleSession
 {
 private:
+    // logical coordinates. must be transformed to screen coordinates.
     unsigned int cursorRow;
     unsigned int cursorCol;
 
     std::string prompt;
+    std::string newLine;
+    std::string* pEdit;
 
     int mode;
     bool bReplace;
     std::vector<std::string> lines;
-    std::vector<std::string> input;
+    dirty_vector<std::string> input;
 
     size_t currentInput;
 
 protected:
+    void replaceEdit(std::string& newEdit)
+    {
+        std::string blanks(pEdit->size(), ' ');
+        logical_mvaddstr(cursorRow, prompt.size(), blanks.c_str(), mode);
+        pEdit = &newEdit;
+        logical_mvaddstr(cursorRow, prompt.size(), pEdit->c_str(), mode);
+        if (cursorCol > prompt.size() + pEdit->size()) {
+            cursorCol = prompt.size() + pEdit->size();
+        }
+    }
+
     bool handleMotion(int c)
     {
         assert(cursorCol >= prompt.size());
@@ -79,7 +95,7 @@ protected:
             return true;
 
         case KEY_RIGHT:
-            if (pos < input[currentInput].size()) cursorCol++;
+            if (pos < pEdit->size()) cursorCol++;
             return true;
 
         default:
@@ -96,8 +112,8 @@ protected:
         case KEY_BACKSPACE:
             if (pos > 0) {
                 cursorCol--;
-                input[currentInput].erase(pos - 1, 1);
-                logical_mvaddstr(cursorRow, cursorCol, input[currentInput].substr(pos - 1).c_str(), mode);
+                pEdit->erase(pos - 1, 1);
+                logical_mvaddstr(cursorRow, cursorCol, pEdit->substr(pos - 1).c_str(), mode);
                 addch(' ');
             }
             return true;
@@ -105,14 +121,19 @@ protected:
         case KEY_UP:
             if (currentInput > 0) {
                 currentInput--;
-                logical_mvaddstr(cursorRow, prompt.size(), input[currentInput].c_str(), mode);
+                replaceEdit(input.getDirty(currentInput));
             }
             return true;
 
         case KEY_DOWN:
-            if (currentInput < input.size() - 1) {
+            if (currentInput < input.size()) {
                 currentInput++;
-                logical_mvaddstr(cursorRow, prompt.size(), input[currentInput].c_str(), mode);
+                if (currentInput == input.size()) {
+                    replaceEdit(newLine);
+                }
+                else {
+                    replaceEdit(input.getDirty(currentInput));
+                }
             }
             return true;
 
@@ -128,18 +149,19 @@ protected:
         assert(cursorCol >= prompt.size());
         size_t pos = cursorCol - prompt.size();
 
-        if (pos > input[currentInput].size()) {
-            input[currentInput] += c;
+        if (pos > pEdit->size()) {
+            *pEdit += c;
         }
         else if (bReplace) {
-            input[currentInput].replace(pos, 1, 1, c);
+            pEdit->replace(pos, 1, 1, c);
         }
         else {
-            input[currentInput].insert(pos, 1, c);
-            logical_mvaddstr(cursorRow, cursorCol + 1, input[currentInput].substr(pos + 1).c_str());
+            pEdit->insert(pos, 1, c);
+            logical_mvaddstr(cursorRow, cursorCol + 1, pEdit->substr(pos + 1).c_str());
         }
         logical_mvaddch(cursorRow, cursorCol, c);
         cursorCol++;
+
         return true;
     }
  
@@ -147,14 +169,16 @@ public:
     ConsoleSession(const std::string& _prompt = "> ", int _mode = MAP_WRAP_AROUND) : cursorRow(0), cursorCol(0), prompt(_prompt), mode(_mode), bReplace(false), currentInput(0) { }
 
     string getLine()
-    {   
+    {
         attrset(COLOR_PAIR(4));
-        logical_mvaddstr(cursorRow, cursorCol, prompt.c_str());
+        logical_mvaddstr(cursorRow, 0, prompt.c_str());
         attrset(COLOR_PAIR(7));
-        int promptlen = prompt.size();
-        cursorCol += promptlen;
-        input.push_back("");
-        currentInput = input.size() - 1;
+
+        newLine = "";
+        pEdit = &newLine;
+        currentInput = input.size();
+        cursorCol = prompt.size();
+
         while (true)
         {   
             logical_move(cursorRow, cursorCol);
@@ -176,8 +200,11 @@ public:
         cursorRow++;
         cursorCol = 0;
 
-        lines.push_back(prompt + input[currentInput]);
-        return input[currentInput];
+        std::string newInput(*pEdit);
+        input.clean();
+        input.push_back(newInput);
+        lines.push_back(prompt + newInput);
+        return newInput;
     }
 
 };
