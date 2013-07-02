@@ -205,6 +205,7 @@ protected:
                 pEdit->erase(pos - 1, 1);
                 logical_mvaddstr(cursorRow, cursorCol, pEdit->substr(pos - 1).c_str());
                 addch(' ');
+                logical_move(cursorRow, cursorCol);
             }
             return true;
 
