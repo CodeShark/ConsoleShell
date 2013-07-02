@@ -197,9 +197,10 @@ void ConsoleSession::replaceEdit(std::string& newEdit)
     logical_mvaddstr(cursorRow, prompt.size(), blanks.c_str());
     pEdit = &newEdit;
     logical_mvaddstr(cursorRow, prompt.size(), pEdit->c_str());
-    if (cursorCol > prompt.size() + pEdit->size()) {
+//    if (cursorCol > prompt.size() + pEdit->size()) {
         cursorCol = prompt.size() + pEdit->size();
-    }
+//    }
+    updateCursor();
 }
 
 bool ConsoleSession::handleMotion(int c)
@@ -211,14 +212,14 @@ bool ConsoleSession::handleMotion(int c)
     case KEY_LEFT:
         if (pos > 0) {
             cursorCol--;
-            logical_move(cursorRow, cursorCol);
+            updateCursor();
         }
         return true;
 
     case KEY_RIGHT:
         if (pos < pEdit->size()) {
             cursorCol++;
-            logical_move(cursorRow, cursorCol);
+            updateCursor();
         }
         return true;
 
@@ -249,7 +250,7 @@ bool ConsoleSession::handleEdit(int c)
             pEdit->erase(pos - 1, 1);
             logical_mvaddstr(cursorRow, cursorCol, pEdit->substr(pos - 1).c_str());
             addch(' ');
-            logical_move(cursorRow, cursorCol);
+            updateCursor();
         }
         return true;
 

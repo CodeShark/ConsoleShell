@@ -66,6 +66,7 @@ protected:
     void autoScroll(unsigned int row);
 
     // cursor motion and output operations
+    int updateCursor(bool bAutoScroll = true) { return logical_move(cursorRow, cursorCol, bAutoScroll); }
     int logical_move(int row, int col, bool bAutoScroll = true);
     int logical_mvchgat(int row, int col, int n, attr_t attr, short color, const void* opts, bool bAutoScroll = true);
     int logical_mvaddch(int row, int col, const chtype c, bool bAutoScroll = true);
