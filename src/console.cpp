@@ -15,7 +15,10 @@ static void finish(int sig);
 
 
 // KEY_ENTER = 232 rather than 13
-#define _KEY_ENTER       13
+#define _KEY_ENTER      13
+
+#define CTRL_F          6
+#define CTRL_B          2
 
 enum {
     MAP_NONE = 0,
@@ -61,24 +64,97 @@ private:
     unsigned int cursorRow;
     unsigned int cursorCol;
 
+    unsigned int scrollRows;
+
     std::string prompt;
     std::string newLine;
     std::string* pEdit;
 
     int mode;
     bool bReplace;
+    std::vector<std::string> prompts;
     std::vector<std::string> lines;
     dirty_vector<std::string> input;
 
     size_t currentInput;
 
 protected:
+    void update()
+    {
+//        endwin();
+//        initscr();
+        refresh();
+        clear();
+
+        unsigned int i = 0;
+        for (; i < lines.size(); i++) {
+            if (prompts[i] != "") {
+                attrset(COLOR_PAIR(4));
+                logical_mvaddstr(i, 0, prompts[i].c_str(), false);
+                attrset(COLOR_PAIR(7));
+                logical_mvaddstr(i, prompts[i].size(), input[i].c_str(), false);
+            }
+            else {
+                logical_mvaddstr(i, 0, lines[i].c_str(), false);
+            }
+        }
+
+        attrset(COLOR_PAIR(4));
+        logical_mvaddstr(i, 0, prompt.c_str(), false);
+        attrset(COLOR_PAIR(7));
+        logical_mvaddstr(i, prompt.size(), pEdit->c_str(), false);
+    }
+
+    void scrollTo(unsigned int row)
+    {
+        scrollRows = row;
+        update();
+    }
+
+    void autoScroll(unsigned int row)
+    {
+        if (row < scrollRows) {
+            scrollTo(row);
+        }
+        else if (row >= scrollRows + LINES) {
+            scrollTo(row - LINES + 1);
+        }
+    }
+
+    int logical_move(int row, int col, bool bAutoScroll = true)
+    {
+        int newRow = mapRow(row, col, mode);
+        if (bAutoScroll) autoScroll(newRow);
+        return move(newRow - scrollRows, mapCol(row, col, mode));
+    }
+
+    int logical_mvchgat(int row, int col, int n, attr_t attr, short color, const void* opts, bool bAutoScroll = true)
+    {
+        int newRow = mapRow(row, col, mode);
+        if (bAutoScroll) autoScroll(newRow);
+        return mvchgat(newRow - scrollRows, mapCol(row, col, mode), n, attr, color, opts);
+    }
+
+    int logical_mvaddch(int row, int col, const chtype c, bool bAutoScroll = true)
+    {
+        int newRow = mapRow(row, col, mode);
+        if (bAutoScroll) autoScroll(newRow);
+        return mvaddch(newRow - scrollRows, mapCol(row, col, mode), c);
+    }
+
+    int logical_mvaddstr(int row, int col, const char* str, bool bAutoScroll = true)
+    {
+        int newRow = mapRow(row, col, mode);
+        if (bAutoScroll) autoScroll(newRow);
+        return mvaddstr(newRow - scrollRows, mapCol(row, col, mode), str);
+    }
+
     void replaceEdit(std::string& newEdit)
     {
         std::string blanks(pEdit->size(), ' ');
-        logical_mvaddstr(cursorRow, prompt.size(), blanks.c_str(), mode);
+        logical_mvaddstr(cursorRow, prompt.size(), blanks.c_str());
         pEdit = &newEdit;
-        logical_mvaddstr(cursorRow, prompt.size(), pEdit->c_str(), mode);
+        logical_mvaddstr(cursorRow, prompt.size(), pEdit->c_str());
         if (cursorCol > prompt.size() + pEdit->size()) {
             cursorCol = prompt.size() + pEdit->size();
         }
@@ -98,6 +174,16 @@ protected:
             if (pos < pEdit->size()) cursorCol++;
             return true;
 
+        case CTRL_F:
+            scrollTo(scrollRows + 1);
+            return true;
+
+        case CTRL_B:
+            if (scrollRows > 0) {
+                scrollTo(scrollRows - 1);
+            }
+            return true;
+
         default:
             return false;
         }
@@ -113,7 +199,7 @@ protected:
             if (pos > 0) {
                 cursorCol--;
                 pEdit->erase(pos - 1, 1);
-                logical_mvaddstr(cursorRow, cursorCol, pEdit->substr(pos - 1).c_str(), mode);
+                logical_mvaddstr(cursorRow, cursorCol, pEdit->substr(pos - 1).c_str());
                 addch(' ');
             }
             return true;
@@ -166,7 +252,8 @@ protected:
     }
  
 public:
-    ConsoleSession(const std::string& _prompt = "> ", int _mode = MAP_WRAP_AROUND) : cursorRow(0), cursorCol(0), prompt(_prompt), mode(_mode), bReplace(false), currentInput(0) { }
+    ConsoleSession(const std::string& _prompt = "> ", int _mode = MAP_WRAP_AROUND) :
+        cursorRow(0), cursorCol(0), scrollRows(0), prompt(_prompt), mode(_mode), bReplace(false), currentInput(0) { }
 
     string getLine()
     {
@@ -204,84 +291,23 @@ public:
         input.clean();
         input.push_back(newInput);
         lines.push_back(prompt + newInput);
+        prompts.push_back(prompt);
         return newInput;
     }
 
+    void putLine(const std::string& line)
+    {
+        attrset(COLOR_PAIR(7));
+        logical_mvaddstr(cursorRow, 0, line.c_str());
+        cursorRow++;
+        cursorCol = 0;
+
+        lines.push_back(line);
+        prompts.push_back("");
+        input.push_back("");
+    }
 };
 
-/*
-bool handleVisible(int& row, int& col, int promptlen, string& line, int c, bool bReplace = false)
-{
-    if (c < ' ' || c > '~') return false;
-
-    assert(col >= promptlen);
-    size_t pos = col - promptlen;
-
-    if (pos > line.size()) {
-        line += c;
-    }
-    else if (bReplace) {
-        line.replace(pos, 1, 1, c);
-    }
-    else {
-        line.insert(pos, 1, c);
-        logical_mvaddstr(row, col + 1, line.substr(pos + 1).c_str());
-    }
-    logical_mvaddch(row, col, c);
-    col++;
-    return true;
-}
-
-bool handleEdit(int& row, int& col, int promptlen, string& line, int c)
-{
-    assert(col >= promptlen);
-    size_t pos = col - promptlen;
-
-    switch (c) {
-    case KEY_BACKSPACE:
-        if (pos > 0) {
-            col--;
-            line.erase(pos - 1, 1);
-            logical_mvaddstr(row, col, line.substr(pos - 1).c_str());
-            addch(' ');
-        }
-        return true;
-
-    default:
-        return false;
-    }
-}
-
-string getLine(int row = 0, int col = 0, const string& prompt = "> ")
-{
-    attrset(COLOR_PAIR(4));
-    logical_mvaddstr(row, col, prompt.c_str());
-    attrset(COLOR_PAIR(7));
-    int promptlen = prompt.size();
-    col += promptlen;
-    string line = "";
-    while (true)
-    {
-        logical_move(row, col);
-        chgat(1, A_STANDOUT, 0, NULL);
-        int c = getch();
-        chgat(1, A_NORMAL, 0, NULL);
-        if (c == _KEY_ENTER) break;
-
-        if (!handleMotion(row, col, promptlen, line, c) &&
-            !handleEdit(row, col, promptlen, line, c) &&
-            !handleVisible(row, col, promptlen, line, c))
-        {
-            stringstream ss;
-            ss << c;
-            logical_mvaddstr(1, 0, ss.str().c_str());
-            addstr("     ");
-        }
-    }
-
-    return line;
-}
-*/
 // SIGWINCH is called when the window is resized.
 void handle_winch(int sig)
 {
@@ -344,7 +370,7 @@ int main(int argc, char *argv[])
         string line = cs.getLine();
         if (line == "exit") break;
 
-        mvprintw(20, 0, line.c_str());
+        cs.putLine(line);
     }
 
     finish(0);               /* we're done */
