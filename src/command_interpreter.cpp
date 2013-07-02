@@ -60,6 +60,7 @@ result_t console_help(bool bHelp, const params_t& params)
     for (; it != command_map.end(); ++it) {
         ss << std::endl << it->second(true, params);
     }
+    ss << std::endl << "exit - exit application.";
     return ss.str();
 }
 
@@ -123,7 +124,11 @@ void doError(const std::string& error)
 {
     std::stringstream err;
     err << "Error: " << error;
-    cs.putLine(err.str());
+
+    std::string line;
+    while (std::getline(err, line, '\n')) {
+        cs.putLine(line);
+    }
 }
 
 void showCommand(const std::string command, params_t& params)
@@ -133,7 +138,11 @@ void showCommand(const std::string command, params_t& params)
     for (uint i = 0; i < params.size(); i++) {
         cmd << " " << params[i];
     }
-    cs.putLine(cmd.str());
+
+    std::string line;
+    while (std::getline(cmd, line, '\n')) {
+        cs.putLine(cmd.str());
+    }
 }
 
 void newline()
@@ -185,6 +194,14 @@ int parseInt(const std::string& text)
     return n;
 }
 
+int repeatCount(const std::string& str, char c)
+{
+    for (uint i = 0; i < str.size(); i++) {
+        if (str[i] != c) return -1;
+    }
+    return str.size(); 
+}
+
 void substituteTokens(params_t& params)
 {
     int last_output = output_history.size() - 1;
@@ -196,18 +213,20 @@ void substituteTokens(params_t& params)
             params[i] = "";
         }
         else if (params[i][0] == '%') {
-            int n;
-            try {
-                n = parseInt(params[i].substr(1));
-            }
-            catch (...) {
-                std::stringstream ss;
-                ss << "Invalid token " << params[i] << ".";
-                throw std::runtime_error(ss.str());
+            int n = -repeatCount(params[i].substr(1), '%'); // returns -1 if other characters in the string.
+            if (n == 1) {
+                try {
+                    n = parseInt(params[i].substr(1));
+                }
+                catch (...) {
+                    std::stringstream ss;
+                    ss << "Invalid token " << params[i] << ".";
+                    throw std::runtime_error(ss.str());
+                }
             }
 
             if (n <= 0) {
-                n = last_output - n;
+                n += last_output + 1;
             }
             n--;
 
