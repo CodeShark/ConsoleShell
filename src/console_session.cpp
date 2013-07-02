@@ -197,9 +197,7 @@ void ConsoleSession::replaceEdit(std::string& newEdit)
     logical_mvaddstr(cursorRow, prompt.size(), blanks.c_str());
     pEdit = &newEdit;
     logical_mvaddstr(cursorRow, prompt.size(), pEdit->c_str());
-//    if (cursorCol > prompt.size() + pEdit->size()) {
-        cursorCol = prompt.size() + pEdit->size();
-//    }
+    cursorCol = prompt.size() + pEdit->size();
     updateCursor();
 }
 
