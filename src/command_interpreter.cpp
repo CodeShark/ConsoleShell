@@ -183,7 +183,7 @@ int parseInt(const std::string& text)
 
 void substituteTokens(params_t& params)
 {
-    int last_output = output_history.size();
+    int last_output = output_history.size() - 1;
 
     for (uint i = 0; i < params.size(); i++) {
         if (params[i] == "") continue;
