@@ -35,6 +35,6 @@ typedef result_t                    (*fAction)(bool, const params_t&);
 void addCommand(const std::string& cmdName, fAction cmdFunc);
 void initCommands();
 
-int startConsole(int argc, char** argv);
+int startInterpreter(int argc, char** argv);
 
 #endif // COMMAND_INTERPRETER__H_

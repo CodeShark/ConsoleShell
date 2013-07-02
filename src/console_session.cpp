@@ -122,9 +122,6 @@ bool ConsoleSession::isCursorInScreen() const
     return ((int)(cursorRow - scrollRows) < LINES);
 }
 
-//
-// Protected Methods
-//
 void ConsoleSession::update()
 {
     refresh();
@@ -163,6 +160,9 @@ void ConsoleSession::autoScroll(unsigned int row)
     }
 }
 
+//
+// Protected Methods
+//
 int ConsoleSession::logical_move(int row, int col, bool bAutoScroll)
 {
     int newRow = mapRow(row, col, mode);
