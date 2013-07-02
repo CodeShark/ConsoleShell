@@ -52,8 +52,6 @@ int logical_mvaddstr(int row, int col, const char* str, int mode = MAP_WRAP_AROU
     return mvaddstr(mapRow(row, col, mode), mapCol(row, col, mode), str);
 }
 
-std::string dummystr;
-
 class ConsoleSession
 {
 private:
@@ -61,7 +59,6 @@ private:
     unsigned int cursorCol;
 
     std::string prompt;
-    std::string& editLine;
 
     int mode;
     bool bReplace;
@@ -82,7 +79,7 @@ protected:
             return true;
 
         case KEY_RIGHT:
-            if (pos < editLine.size()) cursorCol++;
+            if (pos < input[currentInput].size()) cursorCol++;
             return true;
 
         default:
@@ -99,24 +96,23 @@ protected:
         case KEY_BACKSPACE:
             if (pos > 0) {
                 cursorCol--;
-                editLine.erase(pos - 1, 1);
-                logical_mvaddstr(cursorRow, cursorCol, editLine.substr(pos - 1).c_str(), mode);
+                input[currentInput].erase(pos - 1, 1);
+                logical_mvaddstr(cursorRow, cursorCol, input[currentInput].substr(pos - 1).c_str(), mode);
                 addch(' ');
             }
             return true;
 
         case KEY_UP:
             if (currentInput > 0) {
-                editLine = input[--currentInput];
-                addstr(editLine.c_str());
-                logical_mvaddstr(cursorRow, prompt.size(), editLine.c_str(), mode);
+                currentInput--;
+                logical_mvaddstr(cursorRow, prompt.size(), input[currentInput].c_str(), mode);
             }
             return true;
 
         case KEY_DOWN:
             if (currentInput < input.size() - 1) {
-                editLine = input[++currentInput];
-                logical_mvaddstr(cursorRow, prompt.size(), editLine.c_str(), mode);
+                currentInput++;
+                logical_mvaddstr(cursorRow, prompt.size(), input[currentInput].c_str(), mode);
             }
             return true;
 
@@ -132,15 +128,15 @@ protected:
         assert(cursorCol >= prompt.size());
         size_t pos = cursorCol - prompt.size();
 
-        if (pos > editLine.size()) {
-            editLine += c;
+        if (pos > input[currentInput].size()) {
+            input[currentInput] += c;
         }
         else if (bReplace) {
-            editLine.replace(pos, 1, 1, c);
+            input[currentInput].replace(pos, 1, 1, c);
         }
         else {
-            editLine.insert(pos, 1, c);
-            logical_mvaddstr(cursorRow, cursorCol + 1, editLine.substr(pos + 1).c_str());
+            input[currentInput].insert(pos, 1, c);
+            logical_mvaddstr(cursorRow, cursorCol + 1, input[currentInput].substr(pos + 1).c_str());
         }
         logical_mvaddch(cursorRow, cursorCol, c);
         cursorCol++;
@@ -148,7 +144,7 @@ protected:
     }
  
 public:
-    ConsoleSession(const std::string& _prompt = "> ", int _mode = MAP_WRAP_AROUND) : cursorRow(0), cursorCol(0), prompt(_prompt), editLine(dummystr), mode(_mode), bReplace(false), currentInput(0) { }
+    ConsoleSession(const std::string& _prompt = "> ", int _mode = MAP_WRAP_AROUND) : cursorRow(0), cursorCol(0), prompt(_prompt), mode(_mode), bReplace(false), currentInput(0) { }
 
     string getLine()
     {   
@@ -158,7 +154,7 @@ public:
         int promptlen = prompt.size();
         cursorCol += promptlen;
         input.push_back("");
-        editLine = input.back();
+        currentInput = input.size() - 1;
         while (true)
         {   
             logical_move(cursorRow, cursorCol);
@@ -180,10 +176,8 @@ public:
         cursorRow++;
         cursorCol = 0;
 
-        lines.push_back(prompt + editLine);
-        currentInput = input.size();
-
-        return editLine;
+        lines.push_back(prompt + input[currentInput]);
+        return input[currentInput];
     }
 
 };
