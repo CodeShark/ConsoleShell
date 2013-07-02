@@ -87,12 +87,15 @@ protected:
         clear();
 
         unsigned int i = 0;
+        unsigned int j = 0;
         for (; i < lines.size(); i++) {
+            if (i >= scrollRows + LINES) return;
+
             if (prompts[i] != "") {
                 attrset(COLOR_PAIR(4));
                 logical_mvaddstr(i, 0, prompts[i].c_str(), false);
                 attrset(COLOR_PAIR(7));
-                logical_mvaddstr(i, prompts[i].size(), input[i].c_str(), false);
+                logical_mvaddstr(i, prompts[i].size(), input[j++].c_str(), false);
             }
             else {
                 logical_mvaddstr(i, 0, lines[i].c_str(), false);
@@ -103,6 +106,7 @@ protected:
         logical_mvaddstr(i, 0, prompt.c_str(), false);
         attrset(COLOR_PAIR(7));
         logical_mvaddstr(i, prompt.size(), pEdit->c_str(), false);
+        chgat(1, A_STANDOUT, 0, NULL);
     }
 
     void scrollTo(unsigned int row)
@@ -253,23 +257,37 @@ protected:
  
 public:
     ConsoleSession(const std::string& _prompt = "> ", int _mode = MAP_WRAP_AROUND) :
-        cursorRow(0), cursorCol(0), scrollRows(0), prompt(_prompt), mode(_mode), bReplace(false), currentInput(0) { }
+        cursorRow(0), cursorCol(0), scrollRows(0), prompt(_prompt), mode(_mode), bReplace(false), currentInput(0) { attrset(A_NORMAL); }
+
+    bool isCursorInScreen() const
+    {
+        return ((int)(cursorRow - scrollRows) < LINES);
+    }
 
     string getLine()
     {
+        logical_move(cursorRow, cursorCol);
         attrset(COLOR_PAIR(4));
         logical_mvaddstr(cursorRow, 0, prompt.c_str());
         attrset(COLOR_PAIR(7));
+
+        // clear rest of line if necessary
+        string blank(LINES - prompt.size(), ' ');
+        addstr(blank.c_str());
 
         newLine = "";
         pEdit = &newLine;
         currentInput = input.size();
         cursorCol = prompt.size();
 
+        logical_move(cursorRow, cursorCol);
+
         while (true)
-        {   
-            logical_move(cursorRow, cursorCol);
-            chgat(1, A_STANDOUT, 0, NULL);
+        {
+            if (isCursorInScreen()) {
+                // only highlight cursor if it's on the screen.
+                chgat(1, A_STANDOUT, 0, NULL);
+            }
             int c = getch();
             chgat(1, A_NORMAL, 0, NULL);
             if (c == _KEY_ENTER) break;
@@ -304,7 +322,6 @@ public:
 
         lines.push_back(line);
         prompts.push_back("");
-        input.push_back("");
     }
 };
 
