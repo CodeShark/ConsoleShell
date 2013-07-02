@@ -7,7 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "console_session.h"
+//#include "console_session.h"
+#include "command_interpreter.h"
 
 using namespace std;
 
@@ -69,7 +70,7 @@ int main(int argc, char *argv[])
         init_pair(6, COLOR_MAGENTA, COLOR_BLACK);
         init_pair(7, COLOR_WHITE,   COLOR_BLACK);
     }
-
+/*
     ConsoleSession cs;
     while (true) {
         string line = cs.getLine();
@@ -77,6 +78,10 @@ int main(int argc, char *argv[])
 
         cs.putLine(line);
     }
+*/
+
+    initCommands();
+    startConsole(argc, argv);
 
     finish(0);               /* we're done */
 }
