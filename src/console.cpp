@@ -27,7 +27,7 @@ bool handleMotion(int& row, int& col, string& line, int c)
         return true;
 
     case RIGHT_ARROW:
-        if (col < line.size()) {
+        if (col < (int)line.size()) {
             chgat(1, A_NORMAL, 0, NULL);
             move(row, ++col);
         }
@@ -41,7 +41,7 @@ bool handleMotion(int& row, int& col, string& line, int c)
 bool handleVisible(int& row, int& col, string& line, int c, bool bReplace = false)
 {
     if (c >= ' ' && c <= '~') {
-        if (col > line.size()) {
+        if (col > (int)line.size()) {
             line += c;
         }
         else if (bReplace) {
