@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <curses.h>
 #include <signal.h>
+#include <cassert>
 
 #include <sstream>
 #include <string>
@@ -9,6 +10,8 @@ using namespace std;
 
 static void finish(int sig);
 
+#define ENTER_KEY       13
+
 #define DOWN_ARROW      258
 #define UP_ARROW        259
 #define LEFT_ARROW      260
@@ -16,20 +19,59 @@ static void finish(int sig);
 
 #define BACKSPACE       263
 
-bool handleMotion(int& row, int& col, string& line, int c)
+bool handleMotion(int& row, int& col, int promptlen, string& line, int c)
 {
+    assert(col >= promptlen);
+    size_t pos = col - promptlen;
+
     switch (c) {
     case LEFT_ARROW:
-        if (col > 0) {
-            chgat(1, A_NORMAL, 0, NULL);
-            move(row, --col);
-        }
+        if (pos > 0) col--;
         return true;
 
     case RIGHT_ARROW:
-        if (col < (int)line.size()) {
-            chgat(1, A_NORMAL, 0, NULL);
-            move(row, ++col);
+        if (pos < line.size()) col++;
+        return true;
+
+    default:
+        return false;
+    }
+}
+
+bool handleVisible(int& row, int& col, int promptlen, string& line, int c, bool bReplace = false)
+{
+    if (c < ' ' || c > '~') return false;
+
+    assert(col >= promptlen);
+    size_t pos = col - promptlen;
+
+    if (pos > line.size()) {
+        line += c;
+    }
+    else if (bReplace) {
+        line.replace(pos, 1, 1, c);
+    }
+    else {
+        line.insert(pos, 1, c);
+        mvprintw(row, col + 1, "%s", line.substr(pos + 1).c_str());
+    }
+    mvaddch(row, col, c);
+    col++;
+    return true;
+}
+
+bool handleEdit(int& row, int& col, int promptlen, string& line, int c)
+{
+    assert(col >= promptlen);
+    size_t pos = col - promptlen;
+
+    switch (c) {
+    case BACKSPACE:
+        if (pos > 0) {
+            col--;
+            line.erase(pos - 1, 1);
+            mvprintw(row, col, "%s", line.substr(pos - 1).c_str());
+            addch(' ');
         }
         return true;
 
@@ -38,25 +80,34 @@ bool handleMotion(int& row, int& col, string& line, int c)
     }
 }
 
-bool handleVisible(int& row, int& col, string& line, int c, bool bReplace = false)
+string getLine(int row = 0, int col = 0, const string& prompt = "> ")
 {
-    if (c >= ' ' && c <= '~') {
-        if (col > (int)line.size()) {
-            line += c;
+    attrset(COLOR_PAIR(4));
+    mvprintw(row, col, "%s", prompt.c_str());
+    attrset(COLOR_PAIR(7));
+    int promptlen = prompt.size();
+    col += promptlen;
+    string line = "";
+    while (true)
+    {
+        move(row, col);
+        chgat(1, A_STANDOUT, 0, NULL);
+        int c = getch();
+        chgat(1, A_NORMAL, 0, NULL);
+        if (c == ENTER_KEY) break;
+
+        if (!handleMotion(row, col, promptlen, line, c) &&
+            !handleEdit(row, col, promptlen, line, c) &&
+            !handleVisible(row, col, promptlen, line, c))
+        {
+            stringstream ss;
+            ss << c;
+            mvprintw(1, 0, "%s   ", ss.str().c_str());
+            move(row, col);
         }
-        else if (bReplace) {
-            line.replace(col, 1, 1, c);
-        }
-        else {
-            line.insert(col, 1, c);
-            mvprintw(row, col + 1, "%s", line.substr(col + 1).c_str());
-        }
-        mvaddch(row, col, c);
-        col++;
-        return true;
     }
 
-    return false;
+    return line;
 }
 
 int main(int argc, char *argv[])
@@ -89,23 +140,36 @@ int main(int argc, char *argv[])
         init_pair(6, COLOR_MAGENTA, COLOR_BLACK);
         init_pair(7, COLOR_WHITE,   COLOR_BLACK);
     }
-
+/*
     attrset(COLOR_PAIR(7));
     int row = 0;
     int col = 0;
     string line;
     for (;;)
     {
+        move(row, col);
         chgat(1, A_STANDOUT, 0, NULL);
-        int c = getch();     /* refresh, accept single keystroke of input */
-        if (!handleMotion(row, col, line, c) && !handleVisible(row, col, line, c)) {
+        int c = getch();
+        chgat(1, A_NORMAL, 0, NULL);
+
+        if (!handleMotion(row, col, line, c) &&
+            !handleEdit(row, col, line, c) &&
+            !handleVisible(row, col, line, c))
+        {
             stringstream ss;
             ss << c;
             mvprintw(1, 0, "%s   ", ss.str().c_str());
             move(row, col);
         }
 
-        /* process the command keystroke */
+    }*/
+
+    string lastline = "";
+    while (true) {
+        string line = getLine(0, 0, "> ");
+        if (line == "exit") break;
+
+        mvprintw(1, 0, "%s", line.c_str());
     }
 
     finish(0);               /* we're done */
