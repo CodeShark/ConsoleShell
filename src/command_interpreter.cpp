@@ -50,18 +50,29 @@ ConsoleSession cs("> ");
 
 result_t console_help(bool bHelp, const params_t& params)
 {
-    if (bHelp || params.size() > 0) {
+    if (bHelp || params.size() > 1) {
         return "help - displays help information.";
     }
 
-    std::stringstream ss;
-    ss << "List of commands:";
-    command_map_t::iterator it = command_map.begin();
-    for (; it != command_map.end(); ++it) {
-        ss << std::endl << it->second(true, params);
+    std::stringstream out;
+    if (params.size() == 0) {
+        out << "List of commands:";
+        command_map_t::iterator it = command_map.begin();
+        for (; it != command_map.end(); ++it) {
+            out << std::endl << it->second(true, params);
+        }
+        out << std::endl << "exit - exit application.";
+        return out.str();
     }
-    ss << std::endl << "exit - exit application.";
-    return ss.str();
+    else {
+        command_map_t::iterator it = command_map.find(params[0]);
+        if (it == command_map.end()) {
+            std::stringstream err;
+            err << "Invalid command " << params[0] << ".";
+            throw std::runtime_error(err.str());
+        }
+        return it->second(true, params);
+    }
 }
 
 result_t console_echo(bool bHelp, const params_t& params)
